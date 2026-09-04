@@ -1,0 +1,166 @@
+networks:
+  varuna:
+    driver: bridge
+  edge:
+    external: true
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: varuna
+      POSTGRES_PASSWORD: varuna
+      POSTGRES_DB: varuna
+    expose:
+      - "5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - varuna
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U varuna -d varuna"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    expose:
+      - "6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - varuna
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    restart: unless-stopped
+    expose:
+      - "6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - varuna
+
+  api:
+    image: ${DOCKERHUB_USERNAME}/varuna-api:${TAG:-latest}
+    pull_policy: always
+    container_name: api
+    expose:
+      - "8000"
+    restart: unless-stopped
+    env_file:
+      - ./env/api.env
+    environment:
+      DATABASE_URL: postgresql://varuna:varuna@postgres:5432/varuna
+      REDIS_URL: redis://redis:6379
+      QDRANT_URL: http://qdrant:6333
+      PORT: 8000
+      REDIS_HOST: redis
+      INNGEST_BASE_URL: http://inngest:8288
+      INNGEST_SERVE_ORIGIN: http://api:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      inngest:
+        condition: service_started
+    networks:
+      - varuna
+
+  inngest:
+    image: inngest/inngest:latest
+    container_name: inngest
+    expose:
+      - "8288"
+    env_file:
+      - ./env/inngest.env
+    command:
+      - inngest
+      - start
+      - --host=0.0.0.0
+      - --log-level=info
+      - --postgres-uri=postgresql://varuna:varuna@postgres:5432/varuna
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - varuna
+
+  socket:
+    image: ${DOCKERHUB_USERNAME}/varuna-socket:${TAG:-latest}
+    pull_policy: always
+    container_name: socket
+    expose:
+      - "8080"
+    restart: unless-stopped
+    env_file:
+      - ./env/socket.env
+    environment:
+      REDIS_URL: redis://redis:6379
+      REDIS_HOST: redis
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - varuna
+
+  web:
+    image: ${DOCKERHUB_USERNAME}/varuna-web:${TAG:-latest}
+    pull_policy: always
+    container_name: web
+    expose:
+      - "3000"
+    restart: unless-stopped
+    env_file:
+      - ./env/web.env
+    depends_on:
+      - api
+      - socket
+    networks:
+      - varuna
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    expose:
+      - "80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - api
+      - socket
+    networks:
+      - varuna
+      - edge
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=edge"
+      - "traefik.http.routers.varuna.rule=Host(`varuna.manasx.online`)"
+      - "traefik.http.routers.varuna.entrypoints=websecure"
+      - "traefik.http.routers.varuna.tls=true"
+      - "traefik.http.routers.varuna.tls.certresolver=le"
+      - "traefik.http.services.varuna.loadbalancer.server.port=80"
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_storage:
+  caddy_data:
+  caddy_config:

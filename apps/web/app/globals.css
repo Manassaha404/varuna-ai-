@@ -1,0 +1,100 @@
+@import url("https://fonts.googleapis.com/css2?family=DynaPuff:wght@400..700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap");
+
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* ─── Shared auth page utilities ─────────────────────────────────── */
+@layer components {
+  /* Page shell */
+  .auth-page {
+    @apply min-h-screen bg-zinc-950 text-white;
+  }
+
+  /* Top navbar */
+  .auth-nav {
+    @apply flex h-16 items-center justify-between border-b border-white/10 px-6;
+  }
+
+  .auth-nav-logo {
+    @apply text-xl font-semibold tracking-tight;
+  }
+
+  .auth-nav-logo span {
+    @apply text-blue-400;
+  }
+
+  .auth-nav-btn {
+    @apply rounded-full border border-white/10 px-5 py-2 text-sm text-zinc-300 transition hover:bg-white/10;
+  }
+
+  /* Centered section */
+  .auth-section {
+    @apply flex min-h-[calc(100vh-64px)] items-center justify-center px-6 py-12;
+  }
+
+  .auth-container {
+    @apply w-full max-w-md;
+  }
+
+  /* Card header */
+  .auth-header {
+    @apply mb-8 text-center;
+  }
+
+  .auth-title {
+    @apply text-3xl font-bold tracking-tight;
+  }
+
+  .auth-subtitle {
+    @apply mt-2 text-sm text-zinc-500;
+  }
+
+  /* Card body */
+  .auth-card {
+    @apply rounded-2xl border border-white/10 bg-white/[0.03] p-8 shadow-2xl shadow-black/20 backdrop-blur-sm;
+  }
+
+  /* Form */
+  .auth-form {
+    @apply space-y-5;
+  }
+
+  /* Input */
+  .auth-label {
+    @apply mb-2 block text-sm font-medium text-zinc-300;
+  }
+
+  .auth-input {
+    @apply w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-sm text-white placeholder:text-zinc-600 outline-none transition focus:border-blue-400/50 focus:bg-white/[0.06] focus:ring-2 focus:ring-blue-400/10;
+  }
+
+  .auth-field-error {
+    @apply mt-1.5 text-xs text-red-400;
+  }
+
+  /* Alert banners */
+  .auth-alert-error {
+    @apply rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400;
+  }
+
+  .auth-alert-success {
+    @apply rounded-xl border border-green-500/20 bg-green-500/10 px-4 py-3 text-sm text-green-400;
+  }
+
+  /* Primary submit button */
+  .auth-btn-primary {
+    @apply w-full rounded-full bg-blue-500 py-3.5 font-medium text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  /* Ghost link button */
+  .auth-btn-link {
+    @apply font-medium text-blue-400 transition hover:text-blue-300;
+  }
+
+  /* Footer note */
+  .auth-footer {
+    @apply mt-6 text-center text-xs text-zinc-700;
+  }
+}
