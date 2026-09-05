@@ -6,11 +6,11 @@ function getBaseUrl() {
     if (process.env.INTERNAL_API_URL) {
       return process.env.INTERNAL_API_URL;
     }
-    return process.env.NEXT_PUBLIC_API_URL?.replace("/trpc", "") ?? "http://localhost:8000";
+    return process.env.NEXT_PUBLIC_API_URL?.replace("/trpc", "") || "";
   }
 
   // Browser: always use the public API URL
-  return process.env.NEXT_PUBLIC_API_URL?.replace("/trpc", "") ?? "http://localhost:8000";
+  return process.env.NEXT_PUBLIC_API_URL?.replace("/trpc", "") || "";
 }
 
 export const createTRPCLink = () =>

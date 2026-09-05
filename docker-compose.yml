@@ -152,7 +152,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=edge"
-      - "traefik.http.routers.varuna.rule=Host(`varuna.manasx.online`)"
+      - "traefik.http.routers.varuna.rule=Host(`varuna.manasx.online`) || Host(`www.varuna.manasx.online`)"
       - "traefik.http.routers.varuna.entrypoints=websecure"
       - "traefik.http.routers.varuna.tls=true"
       - "traefik.http.routers.varuna.tls.certresolver=le"
