@@ -22,7 +22,7 @@ RUN pnpm install --frozen-lockfile
 COPY --from=builder /app/out/full/ .
 COPY turbo.json turbo.json
 RUN pnpm run build --filter=api...
-RUN pnpm prune --prod
+# RUN pnpm prune --prod (Disabled so we can run drizzle-kit in production)
 
 FROM base AS runner
 WORKDIR /app

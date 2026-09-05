@@ -158,6 +158,10 @@ jobs:
             # Wait for containers to settle
             sleep 5
 
+            echo "Running database migrations..."
+            docker compose exec -T api pnpm --filter @repo/database run db:generate
+            docker compose exec -T api pnpm --filter @repo/database run db:migrate
+
             echo "Checking container health..."
             docker compose ps
 
