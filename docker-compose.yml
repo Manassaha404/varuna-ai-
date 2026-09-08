@@ -93,6 +93,7 @@ services:
       - --host=0.0.0.0
       - --log-level=info
       - --postgres-uri=postgresql://varuna:varuna@postgres:5432/varuna
+      - --signing-key=signkey-prod-0132625fde6756aa7889999384196006a67f5cf9
     depends_on:
       postgres:
         condition: service_healthy
