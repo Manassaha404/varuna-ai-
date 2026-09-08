@@ -12,7 +12,7 @@ export default function Home() {
   const isLoggedIn = Boolean(userId);
 
   function handleGetStarted() {
-    router.push("/login");
+    router.push("/chat");
   }
 
   function handleExplore() {
