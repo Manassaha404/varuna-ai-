@@ -5,7 +5,7 @@ import agentFunctions from "./agentFunctions";
 export const inngestRouter = serve({
   client: inngest,
   functions: [...agentFunctions],
-  serveOrigin: "http://localhost:8000",
+  serveOrigin: process.env.INNGEST_SERVE_ORIGIN ?? "http://localhost:8000",
 });
 
 export { inngest };
