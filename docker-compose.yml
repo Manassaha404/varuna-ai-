@@ -74,6 +74,8 @@ services:
     container_name: inngest
     expose:
       - "8288"
+    ports:
+      - "8288:8288"
     env_file:
       - ./env/inngest.env
     command:

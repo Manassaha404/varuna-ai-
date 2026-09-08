@@ -10,6 +10,10 @@ const envSchema = z.object({
   CLOUDINARY_API_SECRET: z.string(),
   QDRANT_URL: z.string(),
   REDIS_HOST: z.string().default("localhost"),
+  // Inngest — optional so local dev works without them
+  INNGEST_BASE_URL: z.string().optional(),
+  INNGEST_SIGNING_KEY: z.string().optional(),
+  INNGEST_EVENT_KEY: z.string().optional(),
 });
 
 function createEnv(env: NodeJS.ProcessEnv) {
