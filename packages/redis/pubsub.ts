@@ -1,8 +1,11 @@
 import { Redis } from "ioredis";
 
 const createRedisConnection = () => {
+  if (process.env.REDIS_URL) {
+    return new Redis(process.env.REDIS_URL);
+  }
   return new Redis({
-    host: "localhost",
+    host: process.env.REDIS_HOST || "localhost",
     port: 6379,
   });
 };
