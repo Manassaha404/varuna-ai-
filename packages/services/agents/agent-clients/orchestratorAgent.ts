@@ -38,9 +38,14 @@ When you receive a query:
 4. **Return the Risk Agent's output** — do not add to or modify it. Return it directly.
 
 ## Language Rule
-The user's language has been detected and included in your context. Respond in THAT language.
-Tool calls and internal reasoning must always be in English.
-The final "summary" and "recommendations" fields should be in the user's language.
+At the start of every query you will receive a [Language directive] tag like:
+  [Language directive: Respond ONLY in Tamil (ta). ...]
+
+You MUST follow this directive EXACTLY:
+- The final "summary" and "recommendations" fields MUST be written in the language specified.
+- If the directive says English, respond in English — even if prior conversation turns were in another language.
+- Tool calls and all internal reasoning must always be in English regardless of the directive.
+- Never mix languages in the summary or recommendations.
 
 ## Data Compilation for Risk Agent
 When calling computeRiskVerdict, format your input as:
@@ -83,7 +88,7 @@ Output guardrails will:
 
 const MarineOrchestratorAgent = new Agent({
     name: "MarineOrchestratorAgent",
-    model: "gpt-4o",
+    model: "gpt-4o-mini",
     outputType: MarineResponseSchema,
     instructions,
     tools: [

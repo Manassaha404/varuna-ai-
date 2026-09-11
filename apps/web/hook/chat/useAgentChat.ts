@@ -19,13 +19,34 @@ export interface AgentAlert {
   message: string;
 }
 
+export interface TideExtremePoint {
+  time: string;
+  height: number;
+  type: "High" | "Low";
+}
+
+export interface WaveHeightPoint {
+  time: string;
+  height: number;
+}
+
+export interface AgentChartData {
+  tideExtremes: TideExtremePoint[] | null;
+  waveHeights: WaveHeightPoint[] | null;
+}
+
+export interface MapLayer {
+  type: "pfz" | "hazard" | "tide" | "geofence" | "route";
+  geojson: string;
+}
+
 export interface AgentResponse {
   summary: string;
   language: string;
   safetyVerdict: "safe" | "caution" | "unsafe" | "unknown" | null;
   recommendations: string[];
   evidence: AgentEvidence[];
-  mapLayers: unknown[] | null;
+  mapLayers: MapLayer[] | null;
   alerts: AgentAlert[] | null;
   queryLocation: {
     latitude: number;
@@ -33,6 +54,7 @@ export interface AgentResponse {
     placeName: string | null;
   } | null;
   queryTimeHorizon: string | null;
+  chartData: AgentChartData | null;
 }
 
 export type AgentStreamPayload =
@@ -50,6 +72,28 @@ export interface ChatMessage {
   isThinking?: boolean;
   /** Whether the agent returned an error */
   isError?: boolean;
+}
+
+// ─── Helper function ───────────────────────────────────────────────────────
+
+function parseErrorMessage(rawMessage: string, defaultPrefix = ""): string {
+  if (!rawMessage) return "Unknown error occurred.";
+  try {
+    const parsed = JSON.parse(rawMessage);
+    
+    // Handle TRPC array of issues
+    if (Array.isArray(parsed) && parsed.length > 0 && parsed[0]?.message) {
+      return parseErrorMessage(parsed[0].message, defaultPrefix);
+    }
+    
+    // Handle guardrail direct JSON output
+    if (parsed && typeof parsed.reason === "string") {
+      return parsed.reason;
+    }
+  } catch {
+    // Not JSON
+  }
+  return defaultPrefix ? `${defaultPrefix}${rawMessage}` : rawMessage;
 }
 
 // ─── Location types ────────────────────────────────────────────────────────
@@ -75,6 +119,18 @@ export function useAgentChat() {
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>("idle");
+
+  // Whether the user has opted-in to sharing their location with the agent
+  const [locationEnabled, setLocationEnabled] = useState(true);
+  // Ref mirror so sendMessage closure always sees current value without re-memoizing
+  const locationEnabledRef = useRef(true);
+
+  function toggleLocation() {
+    setLocationEnabled((prev) => {
+      locationEnabledRef.current = !prev;
+      return !prev;
+    });
+  }
 
   // Cached geolocation — populated once on mount, reused for every message
   const locationRef = useRef<UserLocation | null>(null);
@@ -154,7 +210,7 @@ export function useAgentChat() {
                   id: `error-${runId}`,
                   isThinking: false,
                   isError: true,
-                  text: `Something went wrong: ${payload.message}`,
+                  text: parseErrorMessage(payload.message, "Something went wrong: "),
                 }
               : msg
           )
@@ -188,9 +244,9 @@ export function useAgentChat() {
       ]);
 
       try {
-        // Append cached location as a compact tag for the agent.
+        // Append cached location only when the user has opted in.
         // The displayed message (text) stays clean — only the agent query is enriched.
-        const loc = locationRef.current;
+        const loc = locationEnabledRef.current ? locationRef.current : null;
         const agentQuery = loc
           ? `${text}\n\n[User's current location: lat ${loc.latitude}, lon ${loc.longitude}]`
           : text;
@@ -217,8 +273,9 @@ export function useAgentChat() {
       } catch (error: any) {
         setIsLoading(false);
         activeRunIdRef.current = null;
-        const errMsg =
-          error?.message ?? "Failed to connect to the agent. Please try again.";
+        const errMsg = parseErrorMessage(
+          error?.message ?? "Failed to connect to the agent. Please try again."
+        );
         setApiError(errMsg);
 
         // Replace the loading message with an error if it was added
@@ -268,6 +325,8 @@ export function useAgentChat() {
     isClearing,
     apiError,
     locationStatus,
+    locationEnabled,
+    toggleLocation,
     sendMessage,
     newChat,
     setApiError,

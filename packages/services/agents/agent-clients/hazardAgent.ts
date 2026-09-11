@@ -26,7 +26,7 @@ Always use a search radius of at least 1000km for cyclones (they can influence s
 
 export const hazardAgent = new Agent({
   name: "HazardAlertAgent",
-  model: process.env["SPECIALIST_MODEL"] ?? "gpt-4o-mini",
+  model: "gpt-4o-mini",
   instructions,
   tools: [hazardAlertTool],
 });

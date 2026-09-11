@@ -27,7 +27,7 @@ current zone boundaries with the local fisheries department (MPEDA, State Fisher
 as marine zone designations can change.`;
 export const geofenceAgent = new Agent({
   name: "GeofenceZoneAgent",
-  model: process.env["SPECIALIST_MODEL"] ?? "gpt-4o-mini",
+  model: "gpt-4o-mini",
   instructions,
   tools: [getProtectedFishingSitesTool],
 });

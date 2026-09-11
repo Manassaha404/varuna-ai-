@@ -22,6 +22,31 @@ export const AlertSchema = z.object({
   message: z.string().describe("Alert message for display to the user"),
 });
 export const SafetyVerdictSchema = z.enum(["safe", "caution", "unsafe", "unknown"]);
+
+// ─── Chart data schemas ────────────────────────────────────────────────────
+
+export const TideExtremePointSchema = z.object({
+  time: z.string().describe("ISO-8601 datetime of the tide extreme"),
+  height: z.number().describe("Tide height in metres above LAT datum"),
+  type: z.enum(["High", "Low"]).describe("Whether this is a High or Low tide extreme"),
+});
+
+export const WaveHeightPointSchema = z.object({
+  time: z.string().describe("ISO-8601 datetime of the forecast hour"),
+  height: z.number().describe("Significant wave height in metres"),
+});
+
+export const ChartDataSchema = z.object({
+  tideExtremes: z
+    .array(TideExtremePointSchema)
+    .nullable()
+    .describe("Structured tide extremes for client-side chart rendering, or null if unavailable"),
+  waveHeights: z
+    .array(WaveHeightPointSchema)
+    .nullable()
+    .describe("Hourly wave height forecast points for chart rendering, or null if unavailable"),
+});
+
 export const MarineResponseSchema = z.object({
   summary: z
     .string()
@@ -71,4 +96,12 @@ export const MarineResponseSchema = z.object({
     .string()
     .nullable()
     .describe("Human-readable time window (e.g. 'next 24 hours'), or null"),
+
+  chartData: ChartDataSchema
+    .nullable()
+    .describe(
+      "Structured time-series data for client-side chart rendering. " +
+      "Populate tideExtremes from WorldTides data and waveHeights from Open-Meteo hourly forecast. " +
+      "Set to null if neither dataset is available."
+    ),
 });

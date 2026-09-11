@@ -7,6 +7,40 @@ import {
   formatMemoryForPrompt,
 } from "../redis/chatMemory.js";
 
+// ─── Fast script-based language detection (no API call) ───────────────────
+// Detects Indian scripts by Unicode block ranges. Falls back to English.
+// This is what actually gets injected into the orchestrator's prompt.
+
+const SCRIPT_RANGES: Array<{ regex: RegExp; code: string; name: string }> = [
+  { regex: /[\u0900-\u097F]/, code: "hi",  name: "Hindi"     }, // Devanagari
+  { regex: /[\u0B80-\u0BFF]/, code: "ta",  name: "Tamil"     },
+  { regex: /[\u0D00-\u0D7F]/, code: "ml",  name: "Malayalam" },
+  { regex: /[\u0C00-\u0C7F]/, code: "te",  name: "Telugu"    },
+  { regex: /[\u0C80-\u0CFF]/, code: "kn",  name: "Kannada"   },
+  { regex: /[\u0A80-\u0AFF]/, code: "gu",  name: "Gujarati"  },
+  { regex: /[\u0980-\u09FF]/, code: "bn",  name: "Bengali"   },
+  { regex: /[\u0B00-\u0B7F]/, code: "or",  name: "Odia"      },
+  { regex: /[\u0A00-\u0A7F]/, code: "pa",  name: "Punjabi"   },
+];
+
+/** Strip the location tag before script detection (same logic as the guardrail). */
+function stripLocationTag(text: string): string {
+  return text.replace(/\[User's current location:[^\]]*\]/gi, "").trim();
+}
+
+/**
+ * Returns { code, name } for the dominant script in the text.
+ * Pure unicode range check — zero latency, no API call.
+ */
+function detectLanguageFromText(text: string): { code: string; name: string } {
+  const clean = stripLocationTag(text);
+  for (const { regex, code, name } of SCRIPT_RANGES) {
+    if (regex.test(clean)) return { code, name };
+  }
+  return { code: "en", name: "English" };
+}
+
+
 // ─── Event payload types ───────────────────────────────────────────────────
 
 interface AgentRunEventData {
@@ -55,11 +89,19 @@ const agentRunFunction = inngest.createFunction(
       return formatMemoryForPrompt(turns);
     });
 
-    // 3. Build the enriched query — prepend prior conversation context so the
-    //    orchestrator agent has awareness of what was already discussed.
+    // 3. Detect language from the raw query and build the enriched query.
+    //    We inject a [Language directive] tag so the orchestrator reads the
+    //    detected language directly in its prompt — the guardrail outputInfo
+    //    is NOT automatically visible to the agent, so we must embed it here.
+    const { code: langCode, name: langName } = detectLanguageFromText(query);
+    const languageDirective = `[Language directive: Respond ONLY in ${langName} (${langCode}). ` +
+      `Tool calls and internal reasoning in English only. ` +
+      `The "summary" and "recommendations" fields MUST be in ${langName}.]`;
+
     const enrichedQuery = contextPrefix
-      ? `${contextPrefix}User: ${query}`
-      : query;
+      ? `${languageDirective}\n${contextPrefix}User: ${query}`
+      : `${languageDirective}\n${query}`;
+
 
     // 4. Run the orchestrator agent (retried automatically by Inngest on throw)
     const output = await step.run("run-orchestrator-agent", async () => {

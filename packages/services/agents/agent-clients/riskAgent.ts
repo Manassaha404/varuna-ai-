@@ -27,8 +27,23 @@ IMPORTANT: ALL fields are required. Use null for absent optional values — do N
   "mapLayers": [...] | null,    // null if no GeoJSON data
   "alerts": [...] | null,       // null if no alerts  
   "queryLocation": {"latitude": ..., "longitude": ..., "placeName": "...or null"} | null,
-  "queryTimeHorizon": "next 24 hours" | null
+  "queryTimeHorizon": "next 24 hours" | null,
+  "chartData": {
+    "tideExtremes": [
+      {"time": "<ISO-8601 datetime>", "height": <metres>, "type": "High" | "Low"},
+      ...
+    ] | null,
+    "waveHeights": [
+      {"time": "<ISO-8601 datetime>", "height": <metres>},
+      ...
+    ] | null
+  } | null
 }
+
+## chartData Population Rules
+- "tideExtremes": Extract from the WorldTides tidal data. Each extreme should have its exact ISO-8601 datetime, height in metres, and type (High or Low). Include ALL extremes provided (typically 6–14 points over 2–3 days). If no tidal data, set to null.
+- "waveHeights": Extract hourly or 3-hourly significant wave height forecasts from Open-Meteo. Include up to 48 data points. If no wave data, set to null.
+- If neither dataset is available, set "chartData" to null.
 
 ## Safety Verdict Rules
 Apply these deterministic rules before your reasoning:
@@ -43,10 +58,10 @@ in the "evidence" array. Do not make unsupported claims. If data is unavailable 
 acknowledge it explicitly in the evidence.
 
 ## Language Rule
-- Respond in the language specified by the detected language code
-- Keep the "summary" and "recommendations" in the user's language
-- Keep all internal field names and "source" values in English
-- Keep timestamps in ISO-8601 format regardless of language
+- Your response MUST be in the language specified by the [Language directive] that was embedded in the original user query.
+- If the directive says English (en), write in English — do not fall back to the language of prior conversation memory.
+- Keep the "summary" and "recommendations" in that specified language.
+- Keep all internal field names, "source" values, and timestamps in English regardless of language.
 
 ## Evidence Sources to Always Include
 Include evidence entries (even if data was unavailable) for:
@@ -59,9 +74,10 @@ Include evidence entries (even if data was unavailable) for:
 If a source returned an error, include the evidence entry with finding: "Data unavailable: <reason>"`;
 export const riskAgent = new Agent({
   name: "RiskRecommendationAgent",
-  model: process.env["ORCHESTRATOR_MODEL"] ?? "gpt-4o",
+  model: "gpt-4o-mini",
   instructions,
 });
+
 
 export const riskAgentTool = riskAgent.asTool({
   toolName: "computeRiskVerdict",

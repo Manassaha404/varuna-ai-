@@ -1,21 +1,31 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState, lazy, Suspense } from "react";
 import { useAgentChat } from "@/hook/chat/useAgentChat";
+import { TideChart } from "@/components/chat/TideChart";
+import { WaveChart } from "@/components/chat/WaveChart";
+import { EvidencePanel } from "@/components/chat/EvidencePanel";
+import dynamic from "next/dynamic";
+
+// MapView is dynamically imported (Leaflet = browser-only)
+const MapView = dynamic(
+  () => import("@/components/chat/MapView").then((m) => ({ default: m.MapView })),
+  { ssr: false }
+);
 
 // ─── Safety badge colors ───────────────────────────────────────────────────
 
 const verdictConfig = {
-  safe: { label: "SAFE", bg: "bg-emerald-500/15", text: "text-emerald-400", dot: "bg-emerald-400" },
-  caution: { label: "CAUTION", bg: "bg-amber-500/15", text: "text-amber-400", dot: "bg-amber-400" },
-  unsafe: { label: "UNSAFE", bg: "bg-red-500/15", text: "text-red-400", dot: "bg-red-400" },
-  unknown: { label: "UNKNOWN", bg: "bg-zinc-500/15", text: "text-zinc-400", dot: "bg-zinc-400" },
+  safe:    { label: "SAFE",    bg: "bg-emerald-500/15", text: "text-emerald-400", dot: "bg-emerald-400", bar: "from-emerald-500" },
+  caution: { label: "CAUTION", bg: "bg-amber-500/15",   text: "text-amber-400",   dot: "bg-amber-400",   bar: "from-amber-500"   },
+  unsafe:  { label: "UNSAFE",  bg: "bg-red-500/15",     text: "text-red-400",     dot: "bg-red-400",     bar: "from-red-500"     },
+  unknown: { label: "UNKNOWN", bg: "bg-zinc-500/15",    text: "text-zinc-400",    dot: "bg-zinc-400",    bar: "from-zinc-500"   },
 } as const;
 
 const alertSeverityConfig = {
-  info: { border: "border-blue-400/30", text: "text-blue-300", icon: "ℹ" },
-  warning: { border: "border-amber-400/30", text: "text-amber-300", icon: "⚠" },
-  severe: { border: "border-red-400/30", text: "text-red-300", icon: "🚨" },
+  info:    { border: "border-blue-400/30",  text: "text-blue-300",  icon: "ℹ"  },
+  warning: { border: "border-amber-400/30", text: "text-amber-300", icon: "⚠"  },
+  severe:  { border: "border-red-400/30",   text: "text-red-300",   icon: "🚨" },
 } as const;
 
 // ─── Thinking dots animation ───────────────────────────────────────────────
@@ -34,6 +44,61 @@ function ThinkingDots() {
   );
 }
 
+// ─── Tab type ─────────────────────────────────────────────────────────────
+
+type VisualizationTab = "map" | "charts" | "evidence";
+
+// ─── Visualization tab strip ──────────────────────────────────────────────
+
+function VisualizationTabs({
+  active,
+  onChange,
+  hasMap,
+  hasCharts,
+  hasEvidence,
+}: {
+  active: VisualizationTab;
+  onChange: (t: VisualizationTab) => void;
+  hasMap: boolean;
+  hasCharts: boolean;
+  hasEvidence: boolean;
+}) {
+  const tabs: { id: VisualizationTab; label: string; icon: string }[] = [
+    { id: "map",      label: "Map",      icon: "🗺️" },
+    { id: "charts",   label: "Charts",   icon: "📊" },
+    { id: "evidence", label: "Sources",  icon: "📋" },
+  ];
+
+  const available = tabs.filter((t) =>
+    t.id === "map"      ? hasMap :
+    t.id === "charts"   ? hasCharts :
+    t.id === "evidence" ? hasEvidence :
+    false
+  );
+
+  if (available.length === 0) return null;
+
+  return (
+    <div className="mt-3 flex gap-1 rounded-xl border border-white/10 bg-zinc-950/60 p-1">
+      {available.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          onClick={() => onChange(tab.id)}
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+            active === tab.id
+              ? "bg-blue-500/20 text-blue-300 shadow-sm"
+              : "text-zinc-500 hover:text-zinc-300"
+          }`}
+        >
+          <span>{tab.icon}</span>
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ─── Assistant message renderer ────────────────────────────────────────────
 
 function AssistantMessage({
@@ -47,11 +112,30 @@ function AssistantMessage({
   isThinking?: boolean;
   isError?: boolean;
 }) {
+  const [activeTab, setActiveTab] = useState<VisualizationTab>("map");
+
   if (isThinking) return <ThinkingDots />;
 
   const verdict = agentData?.safetyVerdict
     ? verdictConfig[agentData.safetyVerdict] ?? verdictConfig.unknown
     : null;
+
+  // ── Determine which visualization tabs have data ───────────────────────
+  const hasMap =
+    !!(agentData?.queryLocation) ||
+    !!(agentData?.mapLayers && agentData.mapLayers.length > 0);
+  const hasTideChart = !!(agentData?.chartData?.tideExtremes?.length);
+  const hasWaveChart = !!(agentData?.chartData?.waveHeights?.length);
+  const hasCharts = hasTideChart || hasWaveChart;
+  const hasEvidence = !!(agentData?.evidence && agentData.evidence.length > 0);
+  const hasAnyVisualization = hasMap || hasCharts || hasEvidence;
+
+  // Default to first available tab
+  useEffect(() => {
+    if (hasMap) setActiveTab("map");
+    else if (hasCharts) setActiveTab("charts");
+    else if (hasEvidence) setActiveTab("evidence");
+  }, [hasMap, hasCharts, hasEvidence]);
 
   return (
     <div className="space-y-3">
@@ -103,6 +187,48 @@ function AssistantMessage({
         </div>
       )}
 
+      {/* ── Visualization panel ──────────────────────────────────────────── */}
+      {hasAnyVisualization && agentData && (
+        <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-3">
+          {/* Tab strip */}
+          <VisualizationTabs
+            active={activeTab}
+            onChange={setActiveTab}
+            hasMap={hasMap}
+            hasCharts={hasCharts}
+            hasEvidence={hasEvidence}
+          />
+
+          {/* Tab content */}
+          <div className="mt-3">
+            {/* MAP TAB */}
+            {activeTab === "map" && hasMap && (
+              <MapView
+                queryLocation={agentData.queryLocation ?? null}
+                mapLayers={agentData.mapLayers ?? null}
+              />
+            )}
+
+            {/* CHARTS TAB */}
+            {activeTab === "charts" && hasCharts && (
+              <div className="space-y-3">
+                {hasTideChart && (
+                  <TideChart tideExtremes={agentData.chartData!.tideExtremes!} />
+                )}
+                {hasWaveChart && (
+                  <WaveChart waveHeights={agentData.chartData!.waveHeights!} />
+                )}
+              </div>
+            )}
+
+            {/* EVIDENCE TAB */}
+            {activeTab === "evidence" && hasEvidence && (
+              <EvidencePanel evidence={agentData.evidence} />
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Location & time horizon footer */}
       {(agentData?.queryLocation || agentData?.queryTimeHorizon) && (
         <div className="flex flex-wrap gap-3 text-xs text-zinc-600">
@@ -127,7 +253,7 @@ function AssistantMessage({
 // ─── Page ──────────────────────────────────────────────────────────────────
 
 export default function ChatPage() {
-  const { messages, isLoading, isClearing, apiError, sendMessage, newChat, setApiError } =
+  const { messages, isLoading, isClearing, apiError, sendMessage, newChat, setApiError, locationStatus, locationEnabled, toggleLocation } =
     useAgentChat();
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -204,13 +330,13 @@ export default function ChatPage() {
               }`}
             >
               {message.role === "assistant" ? (
-                <div className="flex max-w-[90%] items-start gap-3">
+                <div className="flex max-w-[92%] items-start gap-3">
                   {/* Assistant Avatar */}
                   <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-blue-400/20 bg-blue-400/10 text-sm text-blue-300">
                     ✦
                   </div>
 
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="mb-1 text-xs font-medium text-zinc-500">
                       VarunaAI
                     </div>
@@ -235,7 +361,7 @@ export default function ChatPage() {
       </div>
 
       {/* Input Area */}
-      <div className="fixed bottom-0 left-0 right-0 border-t border-white/10 bg-zinc-950/95 px-4 py-4 backdrop-blur-xl sm:px-6">
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-zinc-950/95 px-4 py-4 backdrop-blur-xl sm:px-6">
         <div className="mx-auto max-w-3xl">
           {apiError && (
             <p className="mb-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400 border border-red-500/20">
@@ -255,6 +381,82 @@ export default function ChatPage() {
               className="h-11 flex-1 bg-transparent px-3 text-[15px] text-white outline-none placeholder:text-zinc-500 disabled:opacity-50"
             />
 
+            {/* ── Location toggle pill ─────────────────────────────────── */}
+            {(() => {
+              const canToggle = locationStatus !== "unavailable";
+              const isDenied = locationStatus === "denied";
+              const isGranted = locationStatus === "granted";
+              const isResolving = locationStatus === "resolving";
+
+              const dotColor = !locationEnabled
+                ? "bg-zinc-600"
+                : isDenied
+                ? "bg-amber-400"
+                : isGranted
+                ? "bg-emerald-400"
+                : isResolving
+                ? "bg-blue-400 animate-pulse"
+                : "bg-zinc-500";
+
+              const label = !locationEnabled
+                ? "Location off"
+                : isDenied
+                ? "Denied"
+                : isGranted
+                ? "Location on"
+                : isResolving
+                ? "Locating…"
+                : "No location";
+
+              const title = isDenied
+                ? "Browser denied location access. Enable in site settings to share."
+                : !canToggle
+                ? "Location not available on this device."
+                : locationEnabled
+                ? "Click to stop sharing your location with the AI"
+                : "Click to share your location with the AI";
+
+              return (
+                <button
+                  type="button"
+                  id="location-toggle-btn"
+                  onClick={canToggle && !isDenied ? toggleLocation : undefined}
+                  title={title}
+                  disabled={isLoading || !canToggle || isDenied}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+                    locationEnabled && isGranted
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                      : isDenied
+                      ? "border-amber-500/30 bg-amber-500/10 text-amber-400 cursor-not-allowed"
+                      : !locationEnabled
+                      ? "border-zinc-700 bg-zinc-800/60 text-zinc-500 hover:border-zinc-600 hover:text-zinc-400"
+                      : "border-zinc-700 bg-zinc-800/60 text-zinc-500"
+                  } disabled:opacity-50`}
+                  aria-label={label}
+                  aria-pressed={locationEnabled}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
+                  <span className="hidden sm:inline">{label}</span>
+                  {/* On small screens just show the icon */}
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="sm:hidden"
+                  >
+                    <path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7Z" />
+                    <circle cx="12" cy="9" r="2.5" />
+                  </svg>
+                </button>
+              );
+            })()}
+
+
             <button
               type="button"
               id="chat-send-btn"
@@ -264,36 +466,12 @@ export default function ChatPage() {
               aria-label="Send message"
             >
               {isLoading ? (
-                <svg
-                  className="h-4 w-4 animate-spin"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8v8z"
-                  />
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                 </svg>
               ) : (
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="m22 2-7 20-4-9-9-4Z" />
                   <path d="M22 2 11 13" />
                 </svg>
